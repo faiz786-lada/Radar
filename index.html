@@ -1,0 +1,1190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Advanced Radar System | Arduino + Simulation</title>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --green: #00ff88;
+            --green-dim: rgba(0,255,136,0.15);
+            --green-glow: 0 0 20px rgba(0,255,136,0.5);
+            --red: #ff3355;
+            --yellow: #ffdd00;
+            --bg: #060c18;
+            --panel: #0d1424;
+            --border: #1a2540;
+            --text-muted: #4a6080;
+            --text: #a0b8d0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--bg);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 16px;
+            font-family: 'Share Tech Mono', monospace;
+            background-image:
+                radial-gradient(ellipse at 20% 50%, rgba(0,255,136,0.04) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 20%, rgba(0,100,255,0.04) 0%, transparent 60%);
+        }
+
+        .container {
+            width: 100%;
+            max-width: 520px;
+            background: var(--panel);
+            border-radius: 20px;
+            padding: 20px;
+            border: 1px solid var(--border);
+            box-shadow: 0 30px 80px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.04);
+        }
+
+        /* ── Header ── */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 18px;
+        }
+
+        .title {
+            font-family: 'Orbitron', sans-serif;
+            color: var(--green);
+            font-size: 16px;
+            font-weight: 900;
+            letter-spacing: 3px;
+            text-shadow: var(--green-glow);
+        }
+
+        .mode-badge {
+            background: var(--green-dim);
+            color: var(--green);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: bold;
+            border: 1px solid rgba(0,255,136,0.3);
+            letter-spacing: 1px;
+        }
+
+        /* ── Radar Canvas ── */
+        .radar-wrapper {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 1;
+            border-radius: 50%;
+            margin-bottom: 18px;
+            overflow: hidden;
+            border: 2px solid rgba(0,255,136,0.4);
+            box-shadow: 0 0 40px rgba(0,255,136,0.15), inset 0 0 60px rgba(0,0,0,0.8);
+            cursor: crosshair;
+        }
+
+        /* Corner brackets */
+        .radar-wrapper::before,
+        .radar-wrapper::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            z-index: 10;
+            pointer-events: none;
+        }
+        .radar-wrapper::before {
+            top: 8px; left: 8px;
+            border-top: 2px solid var(--green);
+            border-left: 2px solid var(--green);
+        }
+        .radar-wrapper::after {
+            bottom: 8px; right: 8px;
+            border-bottom: 2px solid var(--green);
+            border-right: 2px solid var(--green);
+        }
+
+        #radarCanvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            display: block;
+        }
+
+        /* Click ripple */
+        .click-ripple {
+            position: absolute;
+            border-radius: 50%;
+            border: 2px solid var(--green);
+            pointer-events: none;
+            animation: rippleAnim 0.6s ease-out forwards;
+            z-index: 5;
+            transform: translate(-50%, -50%);
+        }
+        @keyframes rippleAnim {
+            from { width: 0; height: 0; opacity: 1; }
+            to   { width: 60px; height: 60px; opacity: 0; }
+        }
+
+        /* ── Controls ── */
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .btn {
+            background: #0d1424;
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 14px 5px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-family: 'Share Tech Mono', monospace;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            text-transform: uppercase;
+        }
+
+        .btn span:first-child { font-size: 18px; }
+
+        .btn:hover {
+            border-color: rgba(0,255,136,0.4);
+            background: rgba(0,255,136,0.06);
+            color: var(--green);
+        }
+
+        .btn.active {
+            background: rgba(0,255,136,0.12);
+            color: var(--green);
+            border-color: var(--green);
+            box-shadow: 0 0 16px rgba(0,255,136,0.2);
+        }
+
+        /* Speed control buttons */
+        .speed-controls {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .speed-btn {
+            flex: 1;
+            background: #0d1424;
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 10px;
+            border-radius: 10px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .speed-btn:hover {
+            border-color: rgba(0,255,136,0.4);
+            color: var(--green);
+        }
+
+        /* ── Status Panel ── */
+        .status-panel {
+            background: rgba(0,0,0,0.3);
+            border-radius: 14px;
+            padding: 14px 16px;
+            margin-bottom: 14px;
+            border: 1px solid var(--border);
+        }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .stat-box {
+            text-align: center;
+        }
+
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 10px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .stat-value {
+            color: var(--green);
+            font-family: 'Orbitron', sans-serif;
+            font-size: 18px;
+            font-weight: 700;
+            text-shadow: 0 0 10px rgba(0,255,136,0.4);
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: rgba(0,255,136,0.08);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, rgba(0,255,136,0.4), var(--green));
+            width: 50%;
+            transition: width 0.1s linear;
+            box-shadow: 0 0 8px var(--green);
+        }
+
+        /* ── Target List ── */
+        .target-list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            padding: 0 2px;
+        }
+
+        .section-title {
+            color: var(--text-muted);
+            font-size: 11px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .target-count-badge {
+            background: rgba(0,255,136,0.1);
+            color: var(--green);
+            border: 1px solid rgba(0,255,136,0.3);
+            border-radius: 10px;
+            padding: 2px 10px;
+            font-size: 11px;
+        }
+
+        .target-list {
+            max-height: 140px;
+            overflow-y: auto;
+            background: rgba(0,0,0,0.3);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+
+        .target-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 9px 14px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            font-size: 12px;
+            transition: background 0.2s;
+        }
+
+        .target-item:last-child { border-bottom: none; }
+        .target-item:hover { background: rgba(0,255,136,0.04); }
+
+        .target-name { color: var(--text); }
+
+        .target-tags {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .tag {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-weight: bold;
+        }
+
+        .tag-angle { background: rgba(0,100,255,0.2); color: #6699ff; }
+        .tag-dist  { background: rgba(0,255,136,0.1); color: var(--green); }
+        .tag-red   { background: rgba(255,51,85,0.15); color: var(--red); }
+        .tag-yellow{ background: rgba(255,221,0,0.15); color: var(--yellow); }
+
+        .empty-state {
+            padding: 20px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 12px;
+            letter-spacing: 1px;
+        }
+
+        /* ── Connection Panel ── */
+        .connection-panel {
+            background: rgba(0,0,0,0.3);
+            border-radius: 14px;
+            padding: 14px;
+            margin-top: 14px;
+            border: 1px solid var(--border);
+        }
+
+        .port-selector {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        select {
+            flex: 1;
+            background: #060c18;
+            color: var(--text);
+            border: 1px solid var(--border);
+            padding: 10px 12px;
+            border-radius: 10px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 13px;
+            outline: none;
+        }
+
+        select:focus { border-color: rgba(0,255,136,0.5); }
+
+        .connect-btn {
+            background: var(--green);
+            color: #060c18;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 10px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            letter-spacing: 1px;
+        }
+
+        .connect-btn:hover { box-shadow: 0 0 16px rgba(0,255,136,0.4); }
+        .connect-btn.disconnecting { background: var(--red); color: white; }
+
+        .connection-status {
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-muted);
+            letter-spacing: 1px;
+        }
+
+        /* ── Footer ── */
+        .footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 14px;
+            color: var(--text-muted);
+            font-size: 11px;
+            letter-spacing: 0.5px;
+            padding: 0 4px;
+        }
+
+        .fps-display {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .fps-dot {
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            background: var(--green);
+            box-shadow: 0 0 6px var(--green);
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50%       { opacity: 0.3; }
+        }
+
+        /* ── Toast ── */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            background: rgba(0,255,136,0.12);
+            border: 1px solid rgba(0,255,136,0.4);
+            color: var(--green);
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-size: 12px;
+            letter-spacing: 1px;
+            opacity: 0;
+            transition: all 0.3s;
+            pointer-events: none;
+            z-index: 999;
+            white-space: nowrap;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* ── Scrollbar ── */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(0,255,136,0.3); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--green); }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+        <!-- Header -->
+        <div class="header">
+            <div class="title">⚡ RADAR SYS</div>
+            <div class="mode-badge" id="modeDisplay">SIMULATION</div>
+        </div>
+
+        <!-- Radar Canvas -->
+        <div class="radar-wrapper" id="radarWrapper">
+            <canvas id="radarCanvas"></canvas>
+        </div>
+
+        <!-- Mode & Target Controls -->
+        <div class="controls">
+            <button class="btn active" id="simModeBtn" onclick="setMode('sim')">
+                <span>🔄</span>
+                <span>Simulate</span>
+            </button>
+            <button class="btn" id="arduinoModeBtn" onclick="setMode('arduino')">
+                <span>🔌</span>
+                <span>Arduino</span>
+            </button>
+            <button class="btn" onclick="addRandomTarget()">
+                <span>➕</span>
+                <span>Add</span>
+            </button>
+            <button class="btn" onclick="clearTargets()">
+                <span>🗑️</span>
+                <span>Clear</span>
+            </button>
+        </div>
+
+        <!-- Speed Controls -->
+        <div class="speed-controls">
+            <button class="speed-btn" onclick="changeSpeed(-0.5)">◀ Slower</button>
+            <button class="speed-btn" onclick="changeSpeed(0.5)">Faster ▶</button>
+        </div>
+
+        <!-- Status Panel -->
+        <div class="status-panel">
+            <div class="status-grid">
+                <div class="stat-box">
+                    <div class="stat-label">Angle</div>
+                    <div class="stat-value" id="currentAngle">90°</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Speed</div>
+                    <div class="stat-value" id="scanSpeed">1.5x</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Targets</div>
+                    <div class="stat-value" id="targetCount">0</div>
+                </div>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="scanProgress"></div>
+            </div>
+        </div>
+
+        <!-- Target List -->
+        <div class="target-list-header">
+            <div class="section-title">Detected Targets</div>
+            <div class="target-count-badge" id="targetBadge">0</div>
+        </div>
+        <div class="target-list" id="targetList">
+            <div class="empty-state">NO TARGETS DETECTED</div>
+        </div>
+
+        <!-- Arduino Panel -->
+        <div class="connection-panel" id="arduinoPanel" style="display: none;">
+            <div class="port-selector">
+                <select id="portSelect">
+                    <option value="">Select Port</option>
+                </select>
+                <button class="connect-btn" onclick="connectArduino()" id="connectBtn">CONNECT</button>
+            </div>
+            <div class="connection-status" id="connectionStatus">🔴 DISCONNECTED</div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <div class="fps-display">
+                <div class="fps-dot"></div>
+                <span><span id="fps">60</span> FPS</span>
+            </div>
+            <span>180° SCAN | CLICK TO ADD</span>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+    /* ─────────────────────────────────────────────
+       STATE
+    ───────────────────────────────────────────── */
+    let canvas, ctx;
+    let radarX, radarY, radarRadius;
+    let scanAngle   = 90;
+    let scanDir     = 1;
+    let scanSpeed   = 1.5;
+    let targets     = [];
+    let particles   = [];
+    let trailPoints = [];   // BUG FIX: store trail for smooth sweep
+
+    let currentMode     = 'sim';
+    let arduinoConnected = false;
+    let serialPort      = null;
+    let serialReader    = null;
+    let serialBuffer    = '';   // BUG FIX: buffer for incomplete serial lines
+
+    let animId;
+    let lastTime = 0;
+    let frameCount = 0;
+    let fpsTimer = 0;
+    let displayFps = 60;
+
+    let targetIdCounter = 0;
+
+    /* ─────────────────────────────────────────────
+       CANVAS INIT
+    ───────────────────────────────────────────── */
+    function initCanvas() {
+        canvas = document.getElementById('radarCanvas');
+        ctx    = canvas.getContext('2d');
+
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        addSampleTargets();
+        requestAnimationFrame(animate);
+    }
+
+    function resizeCanvas() {
+        const wrap = document.getElementById('radarWrapper');
+        const size = wrap.clientWidth;
+        canvas.width  = size;
+        canvas.height = size;
+
+        radarX      = size / 2;
+        radarY      = size / 2;
+        radarRadius = size * 0.44;   // BUG FIX: was 0.4, now uses more space
+
+        trailPoints = [];
+    }
+
+    /* ─────────────────────────────────────────────
+       MAIN LOOP
+    ───────────────────────────────────────────── */
+    function animate(ts) {
+        animId = requestAnimationFrame(animate);
+
+        const dt = ts - lastTime || 16;
+        lastTime = ts;
+
+        // FPS counter
+        frameCount++;
+        fpsTimer += dt;
+        if (fpsTimer >= 500) {
+            displayFps = Math.round(frameCount * 1000 / fpsTimer);
+            document.getElementById('fps').textContent = displayFps;
+            frameCount = 0;
+            fpsTimer   = 0;
+        }
+
+        // BUG FIX: use delta-time based speed for consistent motion across frame rates
+        const angleDelta = scanDir * scanSpeed * (dt / 16);
+
+        if (currentMode === 'sim') {
+            scanAngle += angleDelta;
+            if (scanAngle >= 165) { scanAngle = 165; scanDir = -1; }
+            else if (scanAngle <= 15) { scanAngle = 15; scanDir = 1; }
+        }
+
+        // Store trail
+        trailPoints.push({ angle: scanAngle, ts });
+        // Keep last 2 seconds of trail
+        trailPoints = trailPoints.filter(p => ts - p.ts < 2000);
+
+        draw();
+        detectTargets();
+        updateParticles();
+        updateUI();
+    }
+
+    /* ─────────────────────────────────────────────
+       DRAWING
+    ───────────────────────────────────────────── */
+    function draw() {
+        // Background fade
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        drawGrid();
+        drawSweepTrail();
+        drawScanLine();
+        drawTargets();
+        drawParticles();
+        drawCenterPoint();
+    }
+
+    function drawGrid() {
+        ctx.save();
+        ctx.translate(radarX, radarY);
+
+        // Outer fill gradient
+        const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, radarRadius);
+        grad.addColorStop(0, 'rgba(0,255,136,0.02)');
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.beginPath();
+        ctx.arc(0, 0, radarRadius, 0, Math.PI * 2);
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        // Range rings
+        const rings = 5;
+        for (let i = 1; i <= rings; i++) {
+            const r = (radarRadius * i) / rings;
+            const alpha = 0.08 + 0.04 * (i / rings);
+
+            ctx.beginPath();
+            ctx.arc(0, 0, r, 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(0,255,136,${alpha})`;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            // Distance label (right side only)
+            ctx.fillStyle = `rgba(0,255,136,${alpha * 3})`;
+            ctx.font = '9px Share Tech Mono, monospace';
+            ctx.textAlign = 'left';
+            ctx.fillText(`${i * 20}cm`, r + 4, -4);
+        }
+
+        // Angle lines (every 30°, upper half only)
+        for (let a = 0; a <= 180; a += 30) {
+            const rad = (a - 90) * Math.PI / 180;
+            const ex  = Math.cos(rad) * radarRadius;
+            const ey  = Math.sin(rad) * radarRadius;
+
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(ex, ey);
+            ctx.strokeStyle = 'rgba(0,255,136,0.08)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            // Angle labels
+            if (a % 30 === 0) {
+                const lx = Math.cos(rad) * (radarRadius + 14);
+                const ly = Math.sin(rad) * (radarRadius + 14);
+                ctx.fillStyle = 'rgba(0,255,136,0.4)';
+                ctx.font = '9px Share Tech Mono, monospace';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(a + '°', lx, ly);
+            }
+        }
+
+        ctx.restore();
+    }
+
+    function drawSweepTrail() {
+        // BUG FIX: smooth gradient trail instead of repeated cone overdraw
+        if (trailPoints.length < 2) return;
+        const now = performance.now();
+
+        ctx.save();
+        ctx.translate(radarX, radarY);
+
+        for (let i = trailPoints.length - 1; i >= 1; i--) {
+            const p   = trailPoints[i];
+            const age = (now - p.ts) / 2000;       // 0=new, 1=old
+            const alpha = (1 - age) * 0.12;
+            if (alpha <= 0) continue;
+
+            const r1  = (p.angle - 90) * Math.PI / 180;
+            const r2  = (trailPoints[i - 1].angle - 90) * Math.PI / 180;
+
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.arc(0, 0, radarRadius * 0.98, r1, r2, r2 < r1);
+            ctx.closePath();
+            ctx.fillStyle = `rgba(0,255,136,${alpha})`;
+            ctx.fill();
+        }
+
+        ctx.restore();
+    }
+
+    function drawScanLine() {
+        ctx.save();
+        ctx.translate(radarX, radarY);
+
+        const rad = (scanAngle - 90) * Math.PI / 180;
+        const ex  = Math.cos(rad) * radarRadius;
+        const ey  = Math.sin(rad) * radarRadius;
+
+        // Main line
+        const lineGrad = ctx.createLinearGradient(0, 0, ex, ey);
+        lineGrad.addColorStop(0, 'rgba(0,255,136,0.1)');
+        lineGrad.addColorStop(1, 'rgba(0,255,136,1)');
+
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(ex, ey);
+        ctx.strokeStyle = lineGrad;
+        ctx.lineWidth = 2;
+        ctx.shadowColor = '#00ff88';
+        ctx.shadowBlur  = 12;
+        ctx.stroke();
+
+        // Tip glow dot
+        ctx.beginPath();
+        ctx.arc(ex, ey, 5, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowBlur = 20;
+        ctx.fill();
+
+        ctx.restore();
+    }
+
+    function drawTargets() {
+        const now = performance.now();
+
+        for (let i = targets.length - 1; i >= 0; i--) {
+            const t = targets[i];
+
+            // Decay (sim mode only – arduino targets refresh on data)
+            if (currentMode === 'sim') {
+                t.life -= 0.4;
+            }
+
+            t.detectionIntensity = Math.max(0, t.detectionIntensity - 2);
+
+            if (t.life <= 0) {
+                spawnBurst(t.x, t.y, 4);
+                targets.splice(i, 1);
+                continue;
+            }
+
+            ctx.save();
+            ctx.translate(radarX + t.x, radarY + t.y);
+            ctx.globalAlpha = Math.min(1, t.life / 200);
+
+            // Color by distance
+            const color = t.distance < 30 ? '#ff3355' :
+                          t.distance < 60 ? '#ffdd00' : '#00ff88';
+
+            // Detection highlight box
+            if (t.detectionIntensity > 0) {
+                const hi = t.detectionIntensity / 255;
+                ctx.strokeStyle = `rgba(255,255,255,${hi * 0.8})`;
+                ctx.lineWidth   = 1.5;
+                const hs = t.size + 6;
+                ctx.strokeRect(-hs, -hs, hs * 2, hs * 2);
+            }
+
+            // Outer ring
+            ctx.beginPath();
+            ctx.arc(0, 0, t.size * 2.2, 0, Math.PI * 2);
+            ctx.strokeStyle = color;
+            ctx.globalAlpha *= 0.3;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.globalAlpha = Math.min(1, t.life / 200);
+
+            // Core dot
+            ctx.beginPath();
+            ctx.arc(0, 0, t.size, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.shadowColor = color;
+            ctx.shadowBlur  = 12;
+            ctx.fill();
+
+            // Distance label
+            if (t.detectionIntensity > 80) {
+                ctx.globalAlpha = 1;
+                ctx.fillStyle   = '#ffffff';
+                ctx.font        = '9px Share Tech Mono, monospace';
+                ctx.textAlign   = 'center';
+                ctx.shadowBlur  = 0;
+                ctx.fillText(t.distance + 'cm', 0, -t.size - 8);
+            }
+
+            ctx.restore();
+        }
+    }
+
+    function drawParticles() {
+        for (let i = particles.length - 1; i >= 0; i--) {
+            const p = particles[i];
+            p.x    += p.vx;
+            p.y    += p.vy;
+            p.life -= 6;
+            p.size *= 0.96;
+
+            if (p.life <= 0) { particles.splice(i, 1); continue; }
+
+            ctx.save();
+            ctx.translate(radarX + p.x, radarY + p.y);
+            ctx.beginPath();
+            ctx.arc(0, 0, Math.max(0.1, p.size), 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(0,255,136,${p.life / 255})`;
+            ctx.fill();
+            ctx.restore();
+        }
+    }
+
+    function drawCenterPoint() {
+        ctx.save();
+        ctx.translate(radarX, radarY);
+        ctx.beginPath();
+        ctx.arc(0, 0, 4, 0, Math.PI * 2);
+        ctx.fillStyle = '#00ff88';
+        ctx.shadowColor = '#00ff88';
+        ctx.shadowBlur  = 15;
+        ctx.fill();
+        ctx.restore();
+    }
+
+    /* ─────────────────────────────────────────────
+       DETECTION
+    ───────────────────────────────────────────── */
+    function detectTargets() {
+        for (const t of targets) {
+            // BUG FIX: handle angle wrap properly
+            let diff = Math.abs(t.angle - scanAngle);
+            if (diff > 180) diff = 360 - diff;
+
+            if (diff < 8) {
+                t.detectionIntensity = Math.min(255, t.detectionIntensity + 25);
+                t.life = Math.min(255, t.life + 10);   // BUG FIX: refresh life on detection
+
+                if (Math.random() < 0.4) {
+                    spawnParticle(t.x, t.y);
+                }
+            }
+        }
+    }
+
+    /* ─────────────────────────────────────────────
+       PARTICLES
+    ───────────────────────────────────────────── */
+    function spawnParticle(x, y) {
+        particles.push({
+            x, y,
+            vx: (Math.random() - 0.5) * 2.5,
+            vy: (Math.random() - 0.5) * 2.5,
+            life: 200,
+            size: Math.random() * 4 + 1.5
+        });
+    }
+
+    function spawnBurst(x, y, count = 6) {
+        for (let i = 0; i < count; i++) {
+            const angle = (Math.PI * 2 * i) / count;
+            particles.push({
+                x, y,
+                vx: Math.cos(angle) * (Math.random() * 2 + 1),
+                vy: Math.sin(angle) * (Math.random() * 2 + 1),
+                life: 255,
+                size: Math.random() * 4 + 2
+            });
+        }
+    }
+
+    function updateParticles() {
+        // Ambient sparkle (subtle)
+        if (Math.random() < 0.05) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist  = Math.random() * radarRadius * 0.85 + radarRadius * 0.1;
+            particles.push({
+                x: Math.cos(angle) * dist,
+                y: Math.sin(angle) * dist,
+                vx: 0, vy: 0,
+                life: 120,
+                size: Math.random() * 1.5 + 0.5
+            });
+        }
+    }
+
+    /* ─────────────────────────────────────────────
+       UI UPDATE
+    ───────────────────────────────────────────── */
+    function updateUI() {
+        document.getElementById('currentAngle').textContent = Math.round(scanAngle) + '°';
+        document.getElementById('scanSpeed').textContent    = scanSpeed.toFixed(1) + 'x';
+        document.getElementById('targetCount').textContent  = targets.length;
+        document.getElementById('targetBadge').textContent  = targets.length;
+
+        const progress = ((scanAngle - 15) / 150) * 100;
+        document.getElementById('scanProgress').style.width = progress + '%';
+
+        // Target list
+        const list = document.getElementById('targetList');
+        if (targets.length === 0) {
+            list.innerHTML = '<div class="empty-state">NO TARGETS DETECTED</div>';
+        } else {
+            const sorted = [...targets].sort((a, b) => a.distance - b.distance);
+            list.innerHTML = sorted.map(t => {
+                const colorClass = t.distance < 30 ? 'tag-red' :
+                                   t.distance < 60 ? 'tag-yellow' : 'tag-dist';
+                return `
+                <div class="target-item">
+                    <span class="target-name">▸ TGT-${String(t.id).padStart(3,'0')}</span>
+                    <span class="target-tags">
+                        <span class="tag tag-angle">${Math.round(t.angle)}°</span>
+                        <span class="tag ${colorClass}">${t.distance}cm</span>
+                    </span>
+                </div>`;
+            }).join('');
+        }
+    }
+
+    /* ─────────────────────────────────────────────
+       MODE MANAGEMENT
+    ───────────────────────────────────────────── */
+    function setMode(mode) {
+        currentMode = mode;
+
+        document.getElementById('simModeBtn').classList.toggle('active', mode === 'sim');
+        document.getElementById('arduinoModeBtn').classList.toggle('active', mode === 'arduino');
+        document.getElementById('arduinoPanel').style.display = mode === 'arduino' ? 'block' : 'none';
+        document.getElementById('modeDisplay').textContent    = mode === 'sim' ? 'SIMULATION' : 'ARDUINO MODE';
+
+        if (mode === 'sim') {
+            if (arduinoConnected) disconnectArduino();
+            addSampleTargets();
+            showToast('Simulation Mode Active');
+        } else {
+            clearTargets();
+            showToast('Arduino Mode — Connect Device');
+        }
+    }
+
+    /* ─────────────────────────────────────────────
+       TARGET MANAGEMENT
+    ───────────────────────────────────────────── */
+    function addTarget(angle, distance) {
+        // BUG FIX: correct coordinate math (was scaling twice)
+        const rad   = (angle - 90) * Math.PI / 180;
+        const scale = radarRadius / 100;
+        const x     = Math.cos(rad) * distance * scale;
+        const y     = Math.sin(rad) * distance * scale;
+
+        // BUG FIX: avoid duplicate targets too close together
+        const duplicate = targets.find(t =>
+            Math.abs(t.angle - angle) < 5 && Math.abs(t.distance - distance) < 8
+        );
+        if (duplicate) {
+            duplicate.life = 255;
+            return;
+        }
+
+        targets.push({ x, y, angle, distance, life: 255, detectionIntensity: 0, size: 7, id: ++targetIdCounter });
+    }
+
+    function addRandomTarget() {
+        const angle    = Math.random() * 150 + 15;
+        const distance = Math.random() * 80 + 10;
+        addTarget(Math.round(angle), Math.round(distance));
+        showToast('Target Added');
+    }
+
+    function clearTargets() {
+        targets   = [];
+        particles = [];
+        showToast('All Targets Cleared');
+    }
+
+    function addSampleTargets() {
+        clearTargets();
+        addTarget(30,  30);
+        addTarget(90,  55);
+        addTarget(150, 25);
+        addTarget(60,  70);
+        addTarget(120, 40);
+    }
+
+    function changeSpeed(delta) {
+        scanSpeed = Math.max(0.5, Math.min(5, scanSpeed + delta));
+        showToast(`Scan Speed: ${scanSpeed.toFixed(1)}x`);
+    }
+
+    /* ─────────────────────────────────────────────
+       CLICK TO ADD TARGET
+    ───────────────────────────────────────────── */
+    document.getElementById('radarWrapper').addEventListener('click', (e) => {
+        if (currentMode !== 'sim') return;
+
+        const rect   = canvas.getBoundingClientRect();
+        const scaleX = canvas.width  / rect.width;
+        const scaleY = canvas.height / rect.height;
+
+        const mx = (e.clientX - rect.left) * scaleX;
+        const my = (e.clientY - rect.top)  * scaleY;
+
+        const dx   = mx - radarX;
+        const dy   = my - radarY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < radarRadius * 0.98) {
+            let angle = Math.atan2(dy, dx) * 180 / Math.PI + 90;
+            if (angle < 0)    angle += 360;
+            if (angle > 180)  angle = 360 - angle;    // BUG FIX: mirror lower half
+
+            // Clamp to 15–165
+            angle = Math.max(15, Math.min(165, angle));
+
+            const distCm = Math.round((dist / radarRadius) * 100);
+            addTarget(Math.round(angle), distCm);
+
+            // Visual ripple
+            const ripple = document.createElement('div');
+            ripple.className = 'click-ripple';
+            ripple.style.left = (e.clientX - rect.left) + 'px';
+            ripple.style.top  = (e.clientY - rect.top)  + 'px';
+            document.getElementById('radarWrapper').appendChild(ripple);
+            setTimeout(() => ripple.remove(), 700);
+        }
+    });
+
+    /* ─────────────────────────────────────────────
+       ARDUINO – WEB SERIAL API
+    ───────────────────────────────────────────── */
+    async function setupSerial() {
+        if (!('serial' in navigator)) return;
+
+        try {
+            const ports  = await navigator.serial.getPorts();
+            const select = document.getElementById('portSelect');
+
+            for (const port of ports) {
+                const info   = port.getInfo();
+                const option = document.createElement('option');
+                option.textContent = `Device (${info.usbProductId || 'unknown'})`;
+                option.value       = 'saved';
+                select.appendChild(option);
+            }
+        } catch (_) {}
+    }
+
+    async function connectArduino() {
+        if (arduinoConnected) {
+            await disconnectArduino();
+            return;
+        }
+
+        try {
+            serialPort = await navigator.serial.requestPort();
+            await serialPort.open({ baudRate: 9600 });
+
+            arduinoConnected = true;
+            document.getElementById('connectBtn').textContent = 'DISCONNECT';
+            document.getElementById('connectBtn').classList.add('disconnecting');
+            document.getElementById('connectionStatus').innerHTML = '🟢 CONNECTED';
+
+            serialBuffer = '';
+            readSerialData();
+            showToast('Arduino Connected!');
+        } catch (err) {
+            console.error('Serial connect error:', err);
+            showToast('Connection Failed');
+        }
+    }
+
+    async function disconnectArduino() {
+        arduinoConnected = false;
+
+        try {
+            if (serialReader) { await serialReader.cancel(); serialReader = null; }
+            if (serialPort)   { await serialPort.close();   serialPort   = null; }
+        } catch (_) {}
+
+        document.getElementById('connectBtn').textContent = 'CONNECT';
+        document.getElementById('connectBtn').classList.remove('disconnecting');
+        document.getElementById('connectionStatus').innerHTML = '🔴 DISCONNECTED';
+        showToast('Arduino Disconnected');
+    }
+
+    async function readSerialData() {
+        // BUG FIX: proper reader lifecycle + buffer for incomplete lines
+        while (arduinoConnected && serialPort && serialPort.readable) {
+            serialReader = serialPort.readable.getReader();
+            const decoder = new TextDecoder();
+
+            try {
+                while (true) {
+                    const { value, done } = await serialReader.read();
+                    if (done) break;
+
+                    serialBuffer += decoder.decode(value, { stream: true });
+
+                    // Process complete lines
+                    const lines = serialBuffer.split('\n');
+                    serialBuffer = lines.pop();   // keep incomplete tail
+
+                    for (const line of lines) {
+                        const trimmed = line.trim();
+                        if (!trimmed.includes(',')) continue;
+
+                        const [rawA, rawD] = trimmed.split(',');
+                        const angle    = parseFloat(rawA);
+                        const distance = parseFloat(rawD);
+
+                        if (!isNaN(angle) && !isNaN(distance)) {
+                            scanAngle = Math.max(15, Math.min(165, angle));
+                            if (distance > 0 && distance < 200) {
+                                addTarget(Math.round(angle), Math.round(distance));
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                if (arduinoConnected) console.error('Serial read error:', err);
+            } finally {
+                try { serialReader.releaseLock(); } catch (_) {}
+                serialReader = null;
+            }
+        }
+    }
+
+    /* ─────────────────────────────────────────────
+       TOAST
+    ───────────────────────────────────────────── */
+    let toastTimer;
+    function showToast(msg) {
+        const el = document.getElementById('toast');
+        el.textContent = msg;
+        el.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => el.classList.remove('show'), 2000);
+    }
+
+    /* ─────────────────────────────────────────────
+       INIT
+    ───────────────────────────────────────────── */
+    window.addEventListener('load', () => {
+        initCanvas();
+        setupSerial();
+        document.getElementById('simModeBtn').classList.add('active');
+    });
+    </script>
+</body>
+</html>
